@@ -1,7 +1,7 @@
 "=============================================================================
 " FILE: neocomplcache.vim
 " AUTHOR:  Shougo Matsushita <Shougo.Matsu@gmail.com>
-" Last Modified: 14 Sep 2012.
+" Last Modified: 19 Sep 2012.
 " License: MIT license  {{{
 "     Permission is hereby granted, free of charge, to any person obtaining
 "     a copy of this software and associated documentation files (the
@@ -781,11 +781,7 @@ function! s:do_auto_complete(event)"{{{
   " Prevent infinity loop.
   if cur_text == ''
         \ || cur_text == s:old_cur_text
-        \ || (neocomplcache#is_eskk_enabled() &&
-        \      !neocomplcache#is_eskk_convertion(cur_text))
-        \ || (!neocomplcache#is_eskk_enabled() &&
-        \      neocomplcache#is_multibyte_input(cur_text))
-        \ || g:neocomplcache_lock_iminsert && &l:iminsert
+        \ || (g:neocomplcache_lock_iminsert && &l:iminsert)
     let s:cur_keyword_str = ''
     let s:complete_words = []
     return
@@ -799,6 +795,12 @@ function! s:do_auto_complete(event)"{{{
 
   if neocomplcache#is_omni_complete(cur_text)
     call feedkeys("\<Plug>(neocomplcache_start_omni_complete)")
+    return
+  endif
+
+  " Check multibyte input or eskk.
+  if neocomplcache#is_eskk_enabled()
+        \ || neocomplcache#is_multibyte_input(cur_text)
     return
   endif
 
@@ -833,11 +835,7 @@ function! s:do_auto_complete(event)"{{{
   set completeopt+=menuone
 
   " Start auto complete.
-  if neocomplcache#is_prefetch()
-    call feedkeys("\<C-x>\<C-u>\<C-r>=neocomplcache#popup_post()\<CR>", 'n')
-  else
     call feedkeys("\<Plug>(neocomplcache_start_auto_complete)")
-  endif
 
   let s:changedtick = b:changedtick
 endfunction"}}}
@@ -864,10 +862,9 @@ function! neocomplcache#keyword_escape(cur_keyword_str)"{{{
   " Escape."{{{
   let keyword_escape = escape(a:cur_keyword_str, '~" \.^$[]')
   if g:neocomplcache_enable_wildcard
-    let keyword_escape = substitute(substitute(keyword_escape, '.\zs\*', '.*', 'g'), '\%(^\|\*\)\zs\*', '\\*', 'g')
-    if '-' !~ '\k'
-      let keyword_escape = substitute(keyword_escape, '.\zs-', '.\\+', 'g')
-    endif
+    let keyword_escape = substitute(
+          \ substitute(keyword_escape, '.\zs\*', '.*', 'g'),
+          \ '\%(^\|\*\)\zs\*', '\\*', 'g')
   else
     let keyword_escape = escape(keyword_escape, '*')
   endif"}}}
@@ -1225,11 +1222,17 @@ function! neocomplcache#match_word(cur_text, ...)"{{{
   let pattern = a:0 >= 1 ? a:1 : neocomplcache#get_keyword_pattern_end()
 
   " Check wildcard.
-  let cur_keyword_pos = s:match_wildcard(a:cur_text, pattern, match(a:cur_text, pattern))
+  let cur_keyword_pos = s:match_wildcard(
+        \ a:cur_text, pattern, match(a:cur_text, pattern))
 
   let cur_keyword_str = a:cur_text[cur_keyword_pos :]
 
   return [cur_keyword_pos, cur_keyword_str]
+endfunction"}}}
+function! neocomplcache#match_wild_card(cur_keyword_str)"{{{
+  let index = stridx(a:cur_keyword_str, '*')
+  return !g:neocomplcache_enable_wildcard && index > 0 ?
+        \ a:cur_keyword_str : a:cur_keyword_str[: index]
 endfunction"}}}
 function! neocomplcache#is_enabled()"{{{
   return s:is_enabled
@@ -1296,10 +1299,29 @@ function! neocomplcache#is_omni_complete(cur_text)"{{{
     return 0
   endif
 
+  " Check eskk complete length.
+  if neocomplcache#is_eskk_enabled()
+        \ && exists('g:eskk#start_completion_length')
+    if !neocomplcache#is_eskk_convertion(a:cur_text)
+      return 0
+    endif
+
+    let cur_keyword_pos = call(&l:omnifunc, [1, ''])
+    let cur_keyword_str = a:cur_text[cur_keyword_pos :]
+    return neocomplcache#util#mb_strlen(cur_keyword_str) >=
+          \ g:eskk#start_completion_length
+  endif
+
   let filetype = neocomplcache#get_context_filetype()
 
   if &filetype !=# filetype
     " &omnifunc is irregal.
+    return 0
+  endif
+
+  let syn_name = neocomplcache#get_syn_name(1)
+  if syn_name ==# 'Comment' || syn_name ==# 'String'
+    " Skip omni_complete in string literal.
     return 0
   endif
 
@@ -1674,10 +1696,6 @@ function! s:set_complete_results_pos(cur_text, ...)"{{{
 
   let sources = copy(get(a:000, 0, extend(copy(neocomplcache#available_complfuncs()),
         \ neocomplcache#available_loaded_ftplugins())))
-  if neocomplcache#is_eskk_enabled() && eskk#get_mode() !=# 'ascii'
-    " omni_complete only.
-    let sources = filter(sources, 'v:key ==# "omni_complete"')
-  endif
   if a:0 < 1
     call filter(sources, 'neocomplcache#is_source_enabled(v:key)
           \  && !neocomplcache#is_plugin_locked(v:key)')
@@ -2219,6 +2237,7 @@ function! neocomplcache#popup_post()"{{{
         \  || neocomplcache#is_eskk_enabled()) ? "\<C-p>" :
         \ "\<C-p>\<Down>"
 endfunction"}}}
+
 "}}}
 
 " Internal helper functions."{{{
@@ -2292,10 +2311,7 @@ function! s:get_context_filetype(filetype)"{{{
 
   " Default.
   let context_filetype = filetype
-  if neocomplcache#is_eskk_enabled()
-    let context_filetype = 'eskk'
-    let filetype = 'eskk'
-  elseif has_key(g:neocomplcache_context_filetype_lists, filetype)
+  if has_key(g:neocomplcache_context_filetype_lists, filetype)
         \ && !empty(g:neocomplcache_context_filetype_lists[filetype])
 
     let pos = [line('.'), col('.')]
@@ -2330,10 +2346,6 @@ function! s:get_context_filetype(filetype)"{{{
 endfunction"}}}
 function! s:match_wildcard(cur_text, pattern, cur_keyword_pos)"{{{
   let cur_keyword_pos = a:cur_keyword_pos
-  if neocomplcache#is_eskk_enabled() || !g:neocomplcache_enable_wildcard
-    return cur_keyword_pos
-  endif
-
   while cur_keyword_pos > 1 && a:cur_text[cur_keyword_pos - 1] == '*'
     let left_text = a:cur_text[: cur_keyword_pos - 2]
     if left_text == '' || left_text !~ a:pattern

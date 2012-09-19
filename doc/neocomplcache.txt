@@ -723,6 +723,8 @@ g:neocomplcache_vim_completefuncs
 		This dictionary which appoints |vim_complete| call function
 		when completes custom and customlist command.  The key is
 		command name. The value is function name.
+		
+		Default value is {}.
 >
 		" Examples:
 		if !exists('g:neocomplcache_vim_completefuncs')
@@ -730,8 +732,6 @@ g:neocomplcache_vim_completefuncs
 		endif
 		let g:neocomplcache_vim_completefuncs.Ref = 'ref#complete'
 <
-		Default value is {}.
-
 g:neocomplcache_source_disable
 					*g:neocomplcache_source_disable*
 		The dictionary which appoints whether you invalidate a
@@ -739,9 +739,15 @@ g:neocomplcache_source_disable
 		making a value 1.
 					*g:neocomplcache_plugin_disable*
 		Note: g:neocomplcache_plugin_disable is deprecated name.
-		
 		Default value is {}.
-
+>
+		" Examples:
+		if !exists('g:neocomplcache_source_disable')
+		  let g:neocomplcache_source_disable = {}
+		endif
+		let g:neocomplcache_source_disable.member_complete = 1
+		let g:neocomplcache_source_disable.include_complete = 1
+<
 g:neocomplcache_source_completion_length
 				*g:neocomplcache_source_completion_length*
 		It is a dictionary to control each source's completion
@@ -774,15 +780,14 @@ g:neocomplcache_source_rank			*g:neocomplcache_source_rank*
 		other completefunc sources : 10
 		other ftplugin sources : 100
 		
-		Ex:
+		Default value is set by each sources.
 >
+		" Examples:
 		let g:neocomplcache_source_rank = {
 			\ 'snippets_complete' : 100,
 			\ 'abbrev_complete' : 50,
 			\ }
 <
-		Default value is set by each sources.
-
 g:neocomplcache_force_overwrite_completefunc
 				*g:neocomplcache_force_overwrite_completefunc*
 		If this variable is 1, neocomplcache force overwrite
@@ -810,8 +815,8 @@ g:neocomplcache_ignore_composite_filetype_lists
 		It is a dictionary to ignore composite file type.
 		The dictionary's key is composite filetype and value is
 		filetype.
-		Ex:
 >
+		" Examples:
 		let g:neocomplcache_ignore_composite_filetype_lists = {
 			\ 'ruby.spec' : 'ruby'
 			\ }
@@ -878,6 +883,8 @@ neocomplcache#smart_close_popup()		*neocomplcache#smart_close_popup()*
 		Inset candidate and close popup menu for neocomplcache.
 		Unlike|neocomplcache#close_popup()|, this function changes
 		behavior by|g:neocomplcache_enable_auto_select|smart.
+		Note: This mapping is conflicted with |SuperTab| or |endwise|
+		plugins.
 
 neocomplcache#undo_completion()			*neocomplcache#undo_completion()*
 		Use this function on inoremap <expr>. Undo inputed
@@ -938,9 +945,11 @@ EXAMPLES					*neocomplcache-examples*
 	
 	" Recommended key-mappings.
 	" <CR>: close popup and save indent.
-	inoremap <expr><silent> <CR> <SID>my_cr_function()
+	inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
 	function! s:my_cr_function()
-	  return pumvisible() ? neocomplcache#close_popup() . "\<CR>" : "\<CR>"
+	  return neocomplcache#smart_close_popup() . "\<CR>"
+	  " For no inserting <CR> key.
+	  "return pumvisible() ? neocomplcache#close_popup() : "\<CR>"
 	endfunction
 	" <TAB>: completion.
 	inoremap <expr><TAB>  pumvisible() ? "\<C-n>" : "\<TAB>"
@@ -968,7 +977,6 @@ EXAMPLES					*neocomplcache-examples*
 	"let g:neocomplcache_enable_auto_select = 1
 	"let g:neocomplcache_disable_auto_complete = 1
 	"inoremap <expr><TAB>  pumvisible() ? "\<Down>" : "\<C-x>\<C-u>"
-	"inoremap <expr><CR>  neocomplcache#smart_close_popup() . "\<CR>"
 	
 	" Enable omni completion.
 	autocmd FileType css setlocal omnifunc=csscomplete#CompleteCSS
@@ -1056,6 +1064,7 @@ omni_complete.vim				*omni_complete*
 		text is matched with |g:neocomplcache_omni_patterns|. If
 		|g:neocomplcache_omni_function_list|is defined,
 		neocomplcache will give priority it.
+		Note: This source is not supported wildcard.
 
 abbrev_complete.vim				*abbrev_complete*
 		This source collects candidates from abbrev.
@@ -1238,12 +1247,30 @@ A: Please try below settings.
 	let g:clang_auto_select = 0
 	let g:clang_use_library   = 0
 <
+Q: <CR> mapping conflicts with |SuperTab| or |endwise| plugins.
+
+A: Please try below settings.
+>
+	" <CR>: close popup and save indent.
+	inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
+	function! s:my_cr_function()
+	  return neocomplcache#smart_close_popup() . "\<CR>"
+	  " For no inserting <CR> key.
+	  "return pumvisible() ? neocomplcache#close_popup() : "\<CR>"
+	endfunction
+>
 ==============================================================================
 CHANGELOG					*neocomplcache-changelog*
 
 2012-09-19
 - Improved documentation.
 - Fixed :NeoComplCacheAutoCompletionLength documentation.
+- Improved <Plug>(neocomplcache_start_auto_complete).
+- Fixed for eskk.
+- Improved for wildcard.
+- Deleted omni_complete wildcard support.
+- Skip omni_complete in string literal.
+- Added FAQ section.
 
 2012-09-14
 - Improved search base path.
