@@ -1,7 +1,7 @@
 "=============================================================================
 " FILE: neocomplcache.vim
 " AUTHOR:  Shougo Matsushita <Shougo.Matsu@gmail.com>
-" Last Modified: 25 Sep 2012.
+" Last Modified: 27 Sep 2012.
 " License: MIT license  {{{
 "     Permission is hereby granted, free of charge, to any person obtaining
 "     a copy of this software and associated documentation files (the
@@ -51,6 +51,7 @@ function! s:initialize_variables()"{{{
   let s:update_time_save = &updatetime
   let s:filetype_frequencies = {}
   let s:cur_keyword_pos = -1
+  let s:loaded_all_sources = 0
 endfunction"}}}
 
 if !exists('s:is_enabled')
@@ -1357,7 +1358,7 @@ function! neocomplcache#get_source_filetypes(filetype)"{{{
 
   let filetype_dict = {}
 
-  let filetypes = [filetype]
+  let filetypes = [filetype, '_']
   if filetype =~ '\.'
     if has_key(g:neocomplcache_ignore_composite_filetype_lists, filetype)
       let filetypes = [g:neocomplcache_ignore_composite_filetype_lists[filetype]]
@@ -1367,17 +1368,17 @@ function! neocomplcache#get_source_filetypes(filetype)"{{{
     endif
   endif
 
-  for ft in filter(copy(filetypes),
-        \ 'has_key(g:neocomplcache_same_filetype_lists, v:val)')
-    for same_ft in split(g:neocomplcache_same_filetype_lists[ft], ',')
-      if index(filetypes, same_ft) < 0
+  for ft in filetypes
+    for same_ft in split(get(g:neocomplcache_same_filetype_lists, ft,
+          \ get(g:neocomplcache_same_filetype_lists, '_', '')), ',')
+      if same_ft != '' && index(filetypes, same_ft) < 0
         " Add same filetype.
         call add(filetypes, same_ft)
       endif
     endfor
   endfor
 
-  return filetypes
+  return neocomplcache#util#uniq(filetypes)
 endfunction"}}}
 function! neocomplcache#get_sources_list(dictionary, filetype)"{{{
   let list = []
@@ -1583,7 +1584,8 @@ function! neocomplcache#get_complete_words(complete_results, cur_keyword_pos, cu
   " Convert words.
   if neocomplcache#is_text_mode() "{{{
     let convert_candidates = filter(copy(complete_words),
-          \ "get(v:val, 'neocomplcache__convertable', 1)")
+          \ "get(v:val, 'neocomplcache__convertable', 1)
+          \  && v:val.word =~ '^\\u\\+$\\|^\\u\\?\\l\\+$'")
 
     if a:cur_keyword_str =~ '^\l\+$'
       for keyword in convert_candidates
@@ -2107,7 +2109,6 @@ function! neocomplcache#start_manual_complete(...)"{{{
   " Set function.
   let &l:completefunc = 'neocomplcache#sources_manual_complete'
 
-  let s:use_sources = {}
   let all_sources = extend(copy(neocomplcache#available_complfuncs()),
         \ neocomplcache#available_loaded_ftplugins())
   let sources = get(a:000, 0, keys(all_sources))
@@ -2413,15 +2414,22 @@ function! s:initialize_sources(source_names)"{{{
   " Initialize sources table.
 
   for name in a:source_names
+    if has_key(s:complfunc_sources, name)
+            \ || has_key(s:ftplugin_sources, name)
+            \ || has_key(s:plugin_sources, name)
+            \ || s:loaded_all_sources
+      continue
+    endif
+
     " Search autoload.
     for source_name in filter(map(split(globpath(&runtimepath,
           \ 'autoload/neocomplcache/sources/*.vim'), '\n'),
           \ "fnamemodify(v:val, ':t:r')"),
           \ "neocomplcache#is_source_enabled(v:val)")
       let source = neocomplcache#sources#{source_name}#define()
-      if empty(source) || has_key(s:complfunc_sources, source_name)
-            \ || has_key(s:ftplugin_sources, source_name)
-            \ || has_key(s:plugin_sources, source_name)
+      if empty(source) || has_key(s:complfunc_sources, source.name)
+            \ || has_key(s:ftplugin_sources, source.name)
+            \ || has_key(s:plugin_sources, source.name)
         " Ignore.
         continue
       endif
@@ -2445,12 +2453,18 @@ function! s:initialize_sources(source_names)"{{{
         endif
       endif
     endfor
+
+    if name == ''
+      let s:loaded_all_sources = 1
+    endif
   endfor
 endfunction"}}}
 function! s:get_sources_list(...)"{{{
   let filetype = neocomplcache#get_context_filetype()
 
-  let source_names = get(a:000, 0, [''])
+  let source_names = get(a:000, 0,
+        \ get(g:neocomplcache_sources_list, filetype,
+        \   get(g:neocomplcache_sources_list, '_', [''])))
   call s:initialize_sources(source_names)
 
   let all_sources = extend(extend(copy(
