@@ -1,7 +1,7 @@
 "=============================================================================
 " FILE: neocomplcache.vim
 " AUTHOR:  Shougo Matsushita <Shougo.Matsu@gmail.com>
-" Last Modified: 15 Nov 2012.
+" Last Modified: 10 Mar 2013.
 " License: MIT license  {{{
 "     Permission is hereby granted, free of charge, to any person obtaining
 "     a copy of this software and associated documentation files (the
@@ -71,8 +71,10 @@ else
   command! -nargs=1 -bar NeoComplCacheSetFileType
         \ call neocomplcache#set_file_type(<q-args>)
 endif
+command! -nargs=0 -bar NeoComplCacheClean
+      \ call neocomplcache#clean()
 
-" Warning if using obsolute mappings."{{{
+" Warning if using obsolute mappings. "{{{
 silent! inoremap <unique> <Plug>(neocomplcache_snippets_expand)
       \ <C-o>:echoerr <SID>print_snippets_complete_error()<CR>
 silent! snoremap <unique> <Plug>(neocomplcache_snippets_expand)
@@ -95,7 +97,7 @@ function! s:print_snippets_complete_error()
       \ .' "https://github.com/Shougo/neocomplcache-snippets-complete"'
 endfunction"}}}
 
-" Global options definition."{{{
+" Global options definition. "{{{
 let g:neocomplcache_max_list =
       \ get(g:, 'neocomplcache_max_list', 100)
 let g:neocomplcache_max_keyword_width =
@@ -162,6 +164,8 @@ let g:neocomplcache_wildcard_characters =
       \ '_' : '*' })
 let g:neocomplcache_skip_auto_completion_time =
       \ get(g:, 'neocomplcache_skip_auto_completion_time', '0.3')
+let g:neocomplcache_enable_auto_close_preview =
+      \ get(g:, 'neocomplcache_enable_auto_close_preview', 0)
 
 let g:neocomplcache_sources_list =
       \ get(g:, 'neocomplcache_sources_list', {})
@@ -185,14 +189,14 @@ let g:neocomplcache_source_rank =
       \ get(g:, 'neocomplcache_source_rank', {})
 
 let g:neocomplcache_temporary_dir =
-      \ get(g:, 'neocomplcache_temporary_dir', expand('~/.neocon'))
+      \ get(g:, 'neocomplcache_temporary_dir', expand('~/.neocomplcache'))
 let g:neocomplcache_enable_debug =
       \ get(g:, 'neocomplcache_enable_debug', 0)
-if exists('g:neocomplcache_enable_at_startup') && g:neocomplcache_enable_at_startup
+if get(g:, 'neocomplcache_enable_at_startup', 0)
   augroup neocomplcache
-    autocmd!
     " Enable startup.
-    autocmd VimEnter * call neocomplcache#enable()
+    autocmd CursorHold,CursorMovedI
+          \ * call neocomplcache#lazy_initialize()
   augroup END
 endif"}}}
 
